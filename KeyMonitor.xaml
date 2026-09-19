@@ -1,0 +1,115 @@
+<Window x:Class="HotkeyScan.KeyMonitor"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Key monitor" Height="700" Width="1120" MinHeight="560" MinWidth="900"
+        Background="{StaticResource Page}"
+        WindowStartupLocation="CenterOwner"
+        PreviewKeyDown="Window_PreviewKeyDown" PreviewKeyUp="Window_PreviewKeyUp"
+        Closed="Window_Closed">
+
+  <Grid Margin="16">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*"/>
+      <ColumnDefinition Width="320"/>
+    </Grid.ColumnDefinitions>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="Auto"/>
+      <RowDefinition Height="*"/>
+      <RowDefinition Height="Auto"/>
+    </Grid.RowDefinitions>
+
+    <StackPanel Grid.ColumnSpan="2" Margin="2,0,0,14">
+      <TextBlock Text="Key monitor" FontSize="20" FontWeight="SemiBold"/>
+      <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,0"
+                 Text="Whether a key reaches Windows at all, and whether it survives the trip to an application."/>
+    </StackPanel>
+
+    <!-- what to watch -->
+    <Border Grid.Row="1" Style="{StaticResource CardPanel}" Margin="0,0,12,12">
+      <StackPanel>
+        <TextBlock Text="WATCH ONE KEY" Style="{StaticResource Label}"/>
+        <DockPanel>
+          <Button x:Name="ClearButton" DockPanel.Dock="Right" Content="Clear log" Margin="8,0,0,0" Click="Clear_Click"/>
+          <TextBox x:Name="WatchBox" FontSize="15" FontWeight="SemiBold" IsReadOnly="True"
+                   PreviewKeyDown="WatchBox_PreviewKeyDown"/>
+        </DockPanel>
+        <TextBlock x:Name="WatchHint" Style="{StaticResource Hint}" Margin="0,8,0,0"
+                   Text="Click the box and press the key you suspect. Modifiers are always logged; nothing else is, so this never becomes a keylogger."/>
+      </StackPanel>
+    </Border>
+
+    <!-- live state -->
+    <Border Grid.Row="2" Style="{StaticResource CardPanel}" Margin="0,0,12,12">
+      <StackPanel>
+        <TextBlock Text="HELD DOWN RIGHT NOW" Style="{StaticResource Label}"/>
+        <ItemsControl x:Name="Chips">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Background="{Binding Paint}" CornerRadius="4" Padding="9,4" Margin="0,0,6,0">
+                <TextBlock Text="{Binding Name}" Foreground="{Binding Ink}" FontSize="12"/>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
+                   Text="A chip that stays lit while you are not touching the key is a stuck modifier - that alone breaks shortcuts."/>
+      </StackPanel>
+    </Border>
+
+    <!-- the log -->
+    <Border Grid.Row="3" Style="{StaticResource CardPanel}" Margin="0,0,12,0">
+      <DockPanel>
+        <DockPanel DockPanel.Dock="Top">
+          <TextBlock x:Name="HookStatus" DockPanel.Dock="Right" Style="{StaticResource Label}"/>
+          <TextBlock Text="EVENTS, IN ORDER" Style="{StaticResource Label}"/>
+        </DockPanel>
+        <ListView x:Name="Log" BorderBrush="{StaticResource Edge}" BorderThickness="1" FontSize="12">
+          <ListView.View>
+            <GridView>
+              <GridViewColumn Header="Time" Width="88" DisplayMemberBinding="{Binding Time}"/>
+              <GridViewColumn Header="Gap" Width="62" DisplayMemberBinding="{Binding Delta}"/>
+              <GridViewColumn Header="Seen by" Width="62" DisplayMemberBinding="{Binding Source}"/>
+              <GridViewColumn Header="Event" Width="140" DisplayMemberBinding="{Binding Event}"/>
+              <GridViewColumn Header="Detail" Width="300" DisplayMemberBinding="{Binding Detail}"/>
+            </GridView>
+          </ListView.View>
+          <ListView.ItemContainerStyle>
+            <Style TargetType="ListViewItem">
+              <Setter Property="Foreground" Value="{Binding Paint}"/>
+            </Style>
+          </ListView.ItemContainerStyle>
+        </ListView>
+      </DockPanel>
+    </Border>
+
+    <!-- what could rewrite a key -->
+    <Border Grid.Row="1" Grid.RowSpan="3" Grid.Column="1" Style="{StaticResource CardPanel}">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Top" Text="WHAT COULD REWRITE A KEY" Style="{StaticResource Label}"/>
+        <ItemsControl x:Name="Checks">
+          <ItemsControl.Template>
+            <ControlTemplate TargetType="ItemsControl">
+              <ScrollViewer VerticalScrollBarVisibility="Auto"><ItemsPresenter/></ScrollViewer>
+            </ControlTemplate>
+          </ItemsControl.Template>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Margin="0,0,0,14">
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding Detail}" Foreground="{Binding Paint}" TextWrapping="Wrap" FontSize="12"/>
+              </StackPanel>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </DockPanel>
+    </Border>
+
+    <TextBlock Grid.Row="4" Grid.ColumnSpan="2" Margin="2,12,0,0" Style="{StaticResource Hint}"
+               Text="raw = what the keyboard reported to Windows, under every hook and the layer that settles this: no raw row means the key never left the keyboard.  window = what an application actually gets, so a raw row with no window row after it was eaten by software on the way.  hook = the hook chain, a useful middle marker where security software allows it - some anti-keylogger drivers starve a hook instead of refusing it, and the header says so when that happens.&#10;A raw row that reads &quot;no device (synthesized)&quot; was made up by software; the keyboard did not send it."/>
+  </Grid>
+</Window>

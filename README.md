@@ -70,7 +70,7 @@ Only the modifiers and the key you pick in the box are logged — not everything
 
 ## The hard limit
 
-Apps that catch keys through a global hook (Discord, AutoHotkey, peripheral software) reserve
+Apps that catch keys through a global hook (Discord, Steam's overlay, peripheral software, and AutoHotkey for some keys) reserve
 nothing in the kernel, so the first layer can't see them — only the empirical test catches them,
 and only if they do something visible. What goes through a keyboard driver can't be seen from user
 mode at all.

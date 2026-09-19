@@ -23,9 +23,9 @@ internal static class AppScan
         new("nvidia app", "NVIDIA App", "hook", "Alt+Z and the ShadowPlay keys"),
         new("gamebar", "Xbox Game Bar", "system", "Win+G, Win+Alt+R, Win+Alt+PrtSc, Win+Alt+G"),
         new("gamebarftserver", "Xbox Game Bar", "system", "Win+G and friends"),
-        new("autohotkey", "AutoHotkey", "hook", "whatever its script declares"),
-        new("autohotkey64", "AutoHotkey v2", "hook", "whatever its script declares"),
-        new("autohotkey32", "AutoHotkey v2", "hook", "whatever its script declares"),
+        new("autohotkey", "AutoHotkey", "RegisterHotKey, hook for some keys", "whatever its script declares"),
+        new("autohotkey64", "AutoHotkey v2", "RegisterHotKey, hook for some keys", "whatever its script declares"),
+        new("autohotkey32", "AutoHotkey v2", "RegisterHotKey, hook for some keys", "whatever its script declares"),
         new("powertoys.settings", "PowerToys", "RegisterHotKey", "hotkeys read from its settings"),
         new("powertoys", "PowerToys", "RegisterHotKey", "hotkeys read from its settings"),
         new("sharex", "ShareX", "RegisterHotKey", "hotkeys read from its settings"),
@@ -207,7 +207,9 @@ internal static class AppScan
             _ => key,
         };
         if (key.StartsWith("NumPad")) key = "Num" + key[6..];
-        return Keys.TryParse(key, out combo);
+        if (!Keys.TryParse(key, out var bare)) return false;
+        combo = new Combo(mods, bare.Vk);
+        return true;
     }
 
     /// OBS keeps global hotkeys in the profile ini and per-scene ones in the scene json,

@@ -259,6 +259,12 @@ public partial class MainWindow : Window
 
     private KeyMonitor? monitor;
 
+    private void Link_Navigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        Process.Start(new ProcessStartInfo(e.Uri.AbsoluteUri) { UseShellExecute = true });
+        e.Handled = true;
+    }
+
     /// One monitor at a time: each one installs a keyboard hook.
     private void Monitor_Click(object sender, RoutedEventArgs e)
     {

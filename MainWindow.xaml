@@ -30,8 +30,8 @@
         <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,0">
           <TextBlock.Resources><Style TargetType="Hyperlink"><Setter Property="Foreground" Value="{StaticResource Accent}"/></Style></TextBlock.Resources>
           Feedback: <Hyperlink NavigateUri="mailto:feedback@protagonistlabs.app?subject=HotkeyScan%20feedback" RequestNavigate="Link_Navigate">feedback@protagonistlabs.app</Hyperlink>
-          · <Hyperlink NavigateUri="https://protagonistlabs.app/hotkeyscan/?utm_source=app&amp;utm_medium=hotkeyscan" RequestNavigate="Link_Navigate">Website</Hyperlink>
-          · <Hyperlink NavigateUri="https://protagonistlabs.app/?utm_source=app&amp;utm_medium=hotkeyscan" RequestNavigate="Link_Navigate">More apps from Protagonist Labs</Hyperlink>
+          · <Hyperlink NavigateUri="https://protagonistlabs.app/hotkeyscan/?utm_source=hotkeyscan&amp;utm_medium=app&amp;utm_campaign=header" RequestNavigate="Link_Navigate">Website</Hyperlink>
+          · <Hyperlink NavigateUri="https://protagonistlabs.app/?utm_source=hotkeyscan&amp;utm_medium=app&amp;utm_campaign=more-apps" RequestNavigate="Link_Navigate">More apps from Protagonist Labs</Hyperlink>
         </TextBlock>
       </StackPanel>
     </DockPanel>

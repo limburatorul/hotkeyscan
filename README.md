@@ -95,3 +95,9 @@ dotnet publish -c Release -o dist
 ## Licence
 
 MIT. Made by [Protagonist Labs](https://protagonistlabs.app/hotkeyscan/).
+
+## More from Protagonist Labs
+
+- [Lume](https://protagonistlabs.app/lume/?utm_source=github&utm_medium=readme&utm_campaign=hotkeyscan): a free keyboard launcher on Alt+Space.
+- [Auto Clicker](https://protagonistlabs.app/autoclicker/?utm_source=github&utm_medium=readme&utm_campaign=hotkeyscan): a free auto clicker with routes and image waits.
+- [All apps](https://protagonistlabs.app/?utm_source=github&utm_medium=readme&utm_campaign=hotkeyscan): Windows apps that each do one job properly.

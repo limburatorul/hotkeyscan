@@ -7,3 +7,4 @@ publish/
 /graft/
 .ignore
 .claude/
+native/bin/

@@ -9,7 +9,7 @@
     <RootNamespace>HotkeyScan</RootNamespace>
     <AssemblyName>HotkeyScan</AssemblyName>
 
-    <Version>1.0.4</Version>
+    <Version>1.0.5</Version>
     <Product>HotkeyScan</Product>
     <Description>Finds which running program is holding a hotkey</Description>
 
@@ -23,5 +23,16 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
+
+  <!-- "Find the owner": the native hook rides inside the exe and is extracted only while it runs. -->
+  <ItemGroup>
+    <NativeHook Include="native\bin\hook64.dll;native\bin\hook32.dll;native\bin\host32.exe"/>
+    <EmbeddedResource Include="@(NativeHook)" LogicalName="%(Filename)%(Extension)"/>
+  </ItemGroup>
+
+  <Target Name="BuildNativeHook" BeforeTargets="BeforeBuild"
+          Inputs="native\hook.c;native\host32.c;native\build.cmd" Outputs="@(NativeHook)">
+    <Exec Command="&quot;$(MSBuildProjectDirectory)\native\build.cmd&quot;"/>
+  </Target>
 
 </Project>

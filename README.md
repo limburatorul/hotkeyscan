@@ -11,8 +11,36 @@ installed. Double-click and it starts.
   Windows swallows before we see it, like `Win+L`), then **Check**.
 - **All at once** — **Scan them all** sweeps ~760 common combinations. Tick *only unknown owners*
   to keep just the real conflicts: the ones somebody holds but Windows won't say who.
+- **Who reserved it** — for a combination the probe says is taken, **Find the owner** names the
+  program that registered it, whatever it is: process name, exe path and window title. See below.
 - **Who answers** — double-click a row to load it at the top, then **Press it** actually presses
-  the combination and tells you which process reacted.
+  the combination (or a `double-tap Win`/`Ctrl`/`Alt`/`Shift`) and, within about 1.5 s, reports
+  the process whose window came to the front, appeared, or took the keyboard focus, with its exe
+  path. If nothing reacts it says so: *held by a keyboard hook or nothing; owner unknown* — not
+  "free".
+- **Not recognised? Tell us** — next to an unknown owner. It shows the report first (the
+  combination, HotkeyScan version, Windows build and the names of running processes); delete any
+  line, then it opens your mail app addressed to feedback@protagonistlabs.app. Nothing is sent by
+  HotkeyScan, and it never connects to the internet.
+
+## Find the owner — how it works
+
+`RegisterHotKey` doesn't say who holds a combination, but when you press it Windows posts
+`WM_HOTKEY` to the thread that registered it. **Find the owner** installs a `WH_GETMESSAGE` hook
+for 10 seconds and asks you to press the combination; the hook sees which process takes that
+message out of its queue, tells HotkeyScan, and is removed at once (on the first hit or the
+timeout).
+
+- It is opt-in and asks first: the hook means a small DLL is briefly loaded into running
+  programs. **Games with anti-cheat may object — close games first.**
+- 64-bit and 32-bit programs are both covered (`hook64.dll`, and `hook32.dll` installed by a tiny
+  `host32.exe`). They travel inside `HotkeyScan.exe` and are written to a temp folder only while a
+  search runs, then deleted (a folder still in use is swept on the next search). Unsigned, like
+  the exe.
+- Programs running as administrator are reachable only when HotkeyScan runs as administrator too;
+  when nothing is caught, the result says so.
+- It catches `RegisterHotKey` owners only. Keyboard-hook apps (Raycast, Discord, Steam's overlay)
+  get no `WM_HOTKEY` — use **Press it** for those.
 
 ## Key monitor — one key that misbehaves
 
@@ -64,18 +92,25 @@ Only the modifiers and the key you pick in the box are logged — not everything
 2. **The Windows table** — the shortcuts the system reserves, so they don't show up as
    "owner unknown" next to the real culprits.
 3. **Application configs** — reads the hotkeys declared by PowerToys, ShareX, OBS and running
-   AutoHotkey scripts. The only source that gives exact attribution.
-4. **The empirical test** — actually presses the combination and watches which window, process or
-   clipboard moves. It asks first, because it really triggers the hotkey's action.
+   AutoHotkey scripts, plus Raycast's log.
+4. **Find the owner** — catches the `WM_HOTKEY` Windows posts to whoever registered the combination,
+   so it names any `RegisterHotKey` owner, listed above or not.
+5. **The empirical test** — actually presses the combination and watches which window, focus,
+   process or clipboard moves. It asks first, because it really triggers the hotkey's action.
 
 ## The hard limit
 
-Apps that catch keys through a global hook (Discord, Steam's overlay, peripheral software, and AutoHotkey for some keys) reserve
-nothing in the kernel, so the first layer can't see them — only the empirical test catches them,
-and only if they do something visible. What goes through a keyboard driver can't be seen from user
-mode at all.
+Apps that catch keys through a global hook (Raycast, Discord, Steam's overlay, peripheral software,
+and AutoHotkey for some keys) reserve nothing in the kernel, so neither the probe nor **Find the
+owner** can see them — only the empirical test catches them, and only if they do something
+visible. Windows has no API that says which hook ate a key. What goes through a keyboard driver
+can't be seen from user mode at all. Keys pressed by the empirical test don't reach a window that
+runs as administrator unless HotkeyScan does too.
 
 ## From source
+
+Needs the .NET 8 SDK and the MSVC build tools (x64 and x86); the csproj runs
+`native\build.cmd` to build the hook before compiling.
 
 ```bash
 dotnet run
@@ -89,6 +124,8 @@ dotnet publish -c Release -o dist
 | `Combo.cs` | parsing combinations, and the swept set |
 | `Reserved.cs` | the table of Windows shortcuts |
 | `KeyMonitor.xaml` / `.cs` | the key monitor |
+| `OwnerFinder.cs` | Find the owner: extracts the hook, installs it, waits for the hit |
+| `native\hook.c`, `native\host32.c` | the `WH_GETMESSAGE` hook DLL and the 32-bit host |
 | `Remaps.cs` | Scancode Map, PowerToys Keyboard Manager, Sticky/Filter Keys |
 | `AppScan.cs` | PowerToys / ShareX / OBS / AutoHotkey configs and known apps |
 

@@ -41,6 +41,9 @@
       <StackPanel>
         <TextBlock Text="HOTKEY" Style="{StaticResource Label}"/>
         <DockPanel>
+          <Button x:Name="FindButton" DockPanel.Dock="Right" Content="Find the owner" Margin="8,0,0,0"
+                  IsEnabled="False" Click="Find_Click"
+                  ToolTip="Briefly hooks running programs and waits for you to press the combination, then names the program that receives it."/>
           <Button x:Name="PressButton" DockPanel.Dock="Right" Content="Press it" Margin="8,0,0,0"
                   IsEnabled="False" Click="Press_Click"
                   ToolTip="Presses the combination for real and watches which process answers."/>
@@ -50,7 +53,7 @@
                    PreviewKeyDown="HotkeyBox_PreviewKeyDown" TextChanged="HotkeyBox_TextChanged"/>
         </DockPanel>
         <TextBlock Style="{StaticResource Hint}" Margin="0,8,0,0"
-                   Text="Click the box and press the combination, or type it (Ctrl+Alt+S). Combinations Windows swallows first, like Win+L, have to be typed."/>
+                   Text="Click the box and press the combination, or type it (Ctrl+Alt+S, or double-tap Win). Combinations Windows swallows first, like Win+L, have to be typed. Check tells you if it's taken; Find the owner names who reserved it; Press it shows who reacts to it."/>
       </StackPanel>
     </Border>
 
@@ -74,6 +77,9 @@
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
+        <Button x:Name="TellButton" Content="Not recognised? Tell us" HorizontalAlignment="Left"
+                Margin="120,2,0,0" Visibility="Collapsed" Click="Tell_Click"
+                ToolTip="Shows the report first; you can cut lines, and your mail client sends it, not HotkeyScan."/>
       </StackPanel>
     </Border>
 

@@ -72,7 +72,7 @@ internal static class Win32
         var found = new Dictionary<IntPtr, WindowInfo>();
         EnumWindows((h, _) =>
         {
-            if (IsWindowVisible(h) && Title(h).Length > 0) found[h] = Describe(h);
+            if (IsWindowVisible(h)) found[h] = Describe(h);   // untitled too: launcher popups often are
             return true;
         }, IntPtr.Zero);
         return found;
@@ -109,6 +109,47 @@ internal static class Win32
     }
 
     public static uint ClipboardSequence() => GetClipboardSequenceNumber();
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GUITHREADINFO
+    {
+        public int Size, Flags;
+        public IntPtr Active, Focus, Capture, MenuOwner, MoveSize, Caret;
+        public int Left, Top, Right, Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetGUIThreadInfo(uint thread, ref GUITHREADINFO info);
+
+    /// The control with keyboard focus in the foreground thread, whichever process it is in.
+    public static IntPtr FocusedWindow()
+    {
+        var info = new GUITHREADINFO { Size = Marshal.SizeOf<GUITHREADINFO>() };
+        return GetGUIThreadInfo(0, ref info) ? info.Focus : IntPtr.Zero;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr OpenProcess(uint access, bool inherit, uint pid);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(IntPtr handle);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool QueryFullProcessImageNameW(IntPtr process, int flags, StringBuilder path, ref int size);
+
+    /// Limited-information access works on elevated processes too, where Process.MainModule throws.
+    public static string ExePath(uint pid)
+    {
+        IntPtr h = OpenProcess(0x1000, false, pid);   // PROCESS_QUERY_LIMITED_INFORMATION
+        if (h == IntPtr.Zero) return "path not readable";
+        try
+        {
+            var sb = new StringBuilder(1024);
+            int size = sb.Capacity;
+            return QueryFullProcessImageNameW(h, 0, sb, ref size) ? sb.ToString() : "path not readable";
+        }
+        finally { CloseHandle(h); }
+    }
 
     // ---------- pressing the combination ----------
 

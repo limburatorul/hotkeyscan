@@ -1,5 +1,10 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
+using System.Security.Principal;
+using System.Text.RegularExpressions;
+using System.Windows.Automation;
+using System.Windows.Controls;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -39,6 +44,9 @@ public partial class MainWindow : Window
     private List<Declared> declared = new();
     private List<KnownApp> apps = new();
     private Combo? current;
+
+    /// Set instead of current for a double-tap binding ("double-tap Win"): only Press it can test those.
+    private uint tapVk;
 
     /// Set while the empirical test injects keys, so the capture box ignores its own keystrokes.
     private bool injecting;
@@ -104,7 +112,14 @@ public partial class MainWindow : Window
     private void HotkeyBox_TextChanged(object sender, RoutedEventArgs e)
     {
         current = Keys.TryParse(HotkeyBox.Text, out var combo) ? combo : null;
-        CheckButton.IsEnabled = PressButton.IsEnabled = current != null;
+        var tap = Regex.Match(HotkeyBox.Text.Trim(), @"^double-tap (win|ctrl|alt|shift)$", RegexOptions.IgnoreCase);
+        tapVk = !tap.Success ? 0 : tap.Groups[1].Value.ToLowerInvariant() switch { "win" => 0x5Bu, "ctrl" => 0x11u, "alt" => 0x12u, _ => 0x10u };
+        CheckButton.IsEnabled = FindButton.IsEnabled = current != null;
+        PressButton.IsEnabled = current != null || tapVk != 0;
+
+        // A verdict belongs to the combination it was made for.
+        verdicts.Clear();
+        VerdictCard.Visibility = TellButton.Visibility = Visibility.Collapsed;
     }
 
     // ---------- verdict ----------
@@ -115,8 +130,10 @@ public partial class MainWindow : Window
 
         verdicts.Clear();
         VerdictCard.Visibility = Visibility.Visible;
+        TellButton.Visibility = Visibility.Collapsed;
 
-        verdicts.Add(Win32.TryClaim(combo, out int error) switch
+        var probe = Win32.TryClaim(combo, out int error);
+        verdicts.Add(probe switch
         {
             Probe.Free => new Verdict("kernel probe", "free - nothing holds it through RegisterHotKey", Paints.Good),
             Probe.Taken => new Verdict("kernel probe", "TAKEN - another process has reserved it", Paints.Warn),
@@ -134,6 +151,12 @@ public partial class MainWindow : Window
             foreach (var d in matches)
                 verdicts.Add(new Verdict("app configs", $"{d.App} - {d.What}\n{d.Source}", Paints.Warn));
 
+        if (probe == Probe.Taken && !Reserved.TryGet(combo, out _) && matches.Count == 0)
+        {
+            verdicts.Add(new Verdict("owner", "unknown - \"Find the owner\" can name the program that reserved it", Paints.Warn));
+            TellButton.Visibility = Visibility.Visible;
+        }
+
         var hooks = apps.Where(a => a.Mechanism == "hook").Select(a => a.Name).ToList();
         if (hooks.Count > 0)
             verdicts.Add(new Verdict("hook suspects",
@@ -143,57 +166,70 @@ public partial class MainWindow : Window
     /// The only way to catch a keyboard hook: press the combination and watch what moves.
     private async void Press_Click(object sender, RoutedEventArgs e)
     {
-        if (current is not Combo combo) return;
+        string what;
+        if (current is Combo c) what = c.ToString();
+        else if (tapVk != 0) what = HotkeyBox.Text.Trim();
+        else return;
 
         var go = MessageBox.Show(this,
-            $"This presses {combo} for real - whatever owns it will actually fire.\n\nContinue?",
+            $"This presses {what} for real - whatever owns it will actually fire.\n\nContinue?",
             "Empirical test", MessageBoxButton.OKCancel, MessageBoxImage.Warning);
         if (go != MessageBoxResult.OK) return;
 
         PressButton.IsEnabled = false;
-        Status.Text = $"pressing {combo}…";
+        Status.Text = $"pressing {what}…";
 
+        int self = Environment.ProcessId;
         var before = Win32.Foreground();
+        IntPtr focusBefore = Win32.FocusedWindow();
         var windowsBefore = Win32.VisibleWindows();
         var processesBefore = Process.GetProcesses().Select(p => p.Id).ToHashSet();
         uint clipboardBefore = Win32.ClipboardSequence();
 
         injecting = true;
-        Win32.Press(combo);
+        if (current is Combo combo) Win32.Press(combo);
+        else
+        {
+            Win32.Press(new Combo(KeyMods.None, tapVk));
+            await Task.Delay(120);
+            Win32.Press(new Combo(KeyMods.None, tapVk));
+        }
 
+        // About 1.5 s: long enough for a launcher to draw itself, short enough to still be its doing.
         Win32.WindowInfo? moved = null;
-        for (int i = 0; i < 12 && moved == null; i++)
+        IntPtr focused = IntPtr.Zero;
+        for (int i = 0; i < 10 && moved == null; i++)
         {
             await Task.Delay(150);
             var now = Win32.Foreground();
             if (now != null && now.Handle != before?.Handle) moved = now;
+            IntPtr f = Win32.FocusedWindow();
+            if (f != IntPtr.Zero && f != focusBefore) focused = f;
         }
-        await Task.Delay(300);
         injecting = false;
 
         foreach (var stale in verdicts.Where(v => v.Label == "pressed it").ToList())
             verdicts.Remove(stale);
 
         VerdictCard.Visibility = Visibility.Visible;
-        bool anything = false;
-
-        if (moved != null)
+        var seen = new HashSet<string>();
+        void Report(string how, Win32.WindowInfo w)
         {
-            verdicts.Add(new Verdict("pressed it", $"focus moved to {moved.Process} - {moved.Title}", Paints.Good));
-            anything = true;
+            if (w.Pid == self) return;
+            string line = $"{how} {w.Process} - {Win32.ExePath(w.Pid)}" + (w.Title.Length > 0 ? $"\n\"{w.Title}\"" : "");
+            if (seen.Add(line)) verdicts.Add(new Verdict("pressed it", line, Paints.Good));
         }
 
+        if (moved != null) Report("the foreground moved to", moved);
         foreach (var (handle, info) in Win32.VisibleWindows())
-        {
-            if (windowsBefore.ContainsKey(handle)) continue;
-            verdicts.Add(new Verdict("pressed it", $"new window from {info.Process} - {info.Title}", Paints.Good));
-            anything = true;
-        }
+            if (!windowsBefore.ContainsKey(handle)) Report("a new window from", info);
+        if (moved == null && focused != IntPtr.Zero) Report("focus went to", Win32.Describe(focused));
+        bool anything = seen.Count > 0;
 
         foreach (var p in Process.GetProcesses())
         {
             if (processesBefore.Contains(p.Id)) continue;
-            verdicts.Add(new Verdict("pressed it", "new process: " + p.ProcessName, Paints.Good));
+            verdicts.Add(new Verdict("pressed it", $"new process: {p.ProcessName} - {Win32.ExePath((uint)p.Id)}", Paints.Good));
             anything = true;
         }
 
@@ -203,12 +239,117 @@ public partial class MainWindow : Window
             anything = true;
         }
 
-        if (!anything)
+        if (anything) TellButton.Visibility = Visibility.Collapsed;
+        else
+        {
             verdicts.Add(new Verdict("pressed it",
-                "nothing moved. Either nothing owns it, or the owner acts silently: a mute, a macro, an overlay drawn inside a game.", Paints.Dim));
+                "nothing reacted: held by a keyboard hook or nothing; owner unknown. A hook can also act silently (a mute, a macro, an overlay inside a game).", Paints.Warn));
+            TellButton.Visibility = Visibility.Visible;
+        }
 
         PressButton.IsEnabled = true;
         Status.Text = "";
+    }
+
+    /// Names whoever registered the combination, by catching the WM_HOTKEY Windows posts to it.
+    private async void Find_Click(object sender, RoutedEventArgs e)
+    {
+        if (current is not Combo combo) return;
+        const int seconds = 10;
+
+        var go = MessageBox.Show(this,
+            $"To see who receives {combo}, HotkeyScan briefly loads a small hook DLL into running programs "
+            + $"for up to {seconds} seconds, then removes it. Nothing leaves this PC.\n\n"
+            + "Games with anti-cheat may object to that - close games first.\n\n"
+            + $"After you click OK, press {combo} yourself.",
+            "Find the owner", MessageBoxButton.OKCancel, MessageBoxImage.Information);
+        if (go != MessageBoxResult.OK) return;
+
+        foreach (var stale in verdicts.Where(v => v.Label == "owner").ToList())
+            verdicts.Remove(stale);
+        VerdictCard.Visibility = Visibility.Visible;
+        FindButton.IsEnabled = PressButton.IsEnabled = CheckButton.IsEnabled = false;
+        injecting = true;   // the capture box must not rewrite itself while the user presses
+        Status.Text = $"Press {combo} now - {seconds} s";
+
+        try
+        {
+            var hit = await OwnerFinder.Find(combo, seconds);
+            if (hit != null)
+            {
+                verdicts.Add(new Verdict("owner", $"{hit.Process} (pid {hit.Pid}) - {hit.Path}"
+                    + (hit.Title.Length > 0 ? $"\n\"{hit.Title}\"" : ""), Paints.Good));
+                TellButton.Visibility = Visibility.Collapsed;
+            }
+            else
+            {
+                bool admin = new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
+                verdicts.Add(new Verdict("owner",
+                    $"nothing caught in {seconds} s. It wasn't pressed, nothing reserved it (a keyboard hook - try Press it), "
+                    + (admin ? "or the owner never reads its message queue."
+                             : "or the owner runs as administrator: those are only reachable when HotkeyScan runs as administrator too."),
+                    Paints.Warn));
+                TellButton.Visibility = Visibility.Visible;
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
+        {
+            verdicts.Add(new Verdict("owner", "could not run: " + ex.Message, Paints.Bad));
+        }
+        finally
+        {
+            injecting = false;
+            FindButton.IsEnabled = PressButton.IsEnabled = CheckButton.IsEnabled = true;
+            Status.Text = "";
+        }
+    }
+
+    /// Shows the whole report first so the user can cut lines; the mail client sends it, never HotkeyScan.
+    private void Tell_Click(object sender, RoutedEventArgs e)
+    {
+        var names = Process.GetProcesses().Select(p => p.ProcessName)
+            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.OrdinalIgnoreCase);
+        string body = $"Combination: {HotkeyBox.Text.Trim()}\n"
+            + $"HotkeyScan: {typeof(App).Assembly.GetName().Version?.ToString(3)}\n"
+            + $"Windows build: {Environment.OSVersion.Version}\n"
+            + "What HotkeyScan said:\n" + string.Join("\n", verdicts.Select(v => $"  {v.Label}: {v.Text.Replace("\n", " ")}")) + "\n"
+            + "Running processes (delete any you'd rather not share):\n" + string.Join("\n", names);
+
+        var text = new TextBox
+        {
+            Text = body, AcceptsReturn = true, TextWrapping = TextWrapping.NoWrap,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            FontFamily = new FontFamily("Consolas"), FontSize = 12,
+        };
+        AutomationProperties.SetName(text, "Report text");
+        var note = new TextBlock
+        {
+            Text = "This is everything the e-mail will contain - delete any line you like. Your mail app opens with it; nothing is sent until you send it there.",
+            TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 10), Style = (Style)FindResource("Hint"),
+        };
+        var send = new Button { Content = "Open in my mail app", IsDefault = true, Style = (Style)FindResource("Primary") };
+        var cancel = new Button { Content = "Cancel", IsCancel = true, Margin = new Thickness(8, 0, 0, 0) };
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 10, 0, 0) };
+        buttons.Children.Add(send);
+        buttons.Children.Add(cancel);
+        var layout = new DockPanel { Margin = new Thickness(16) };
+        DockPanel.SetDock(note, Dock.Top);
+        DockPanel.SetDock(buttons, Dock.Bottom);
+        layout.Children.Add(note);
+        layout.Children.Add(buttons);
+        layout.Children.Add(text);
+
+        var dialog = new Window
+        {
+            Title = "Tell us about an unknown owner", Owner = this, Width = 560, Height = 520, ShowInTaskbar = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner, Background = (Brush)FindResource("Page"), Content = layout,
+        };
+        send.Click += (_, _) => dialog.DialogResult = true;
+        if (dialog.ShowDialog() != true) return;
+
+        string url = "mailto:feedback@protagonistlabs.app?subject=HotkeyScan%20unknown%20owner&body="
+            + Uri.EscapeDataString(text.Text.ReplaceLineEndings("\r\n"));
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
     }
 
     // ---------- sweep ----------

@@ -129,7 +129,7 @@ public partial class MainWindow : Window
 
         var matches = declared.Where(d => d.Combo == combo).ToList();
         if (matches.Count == 0)
-            verdicts.Add(new Verdict("app configs", "no match in PowerToys, ShareX, OBS or AutoHotkey", Paints.Dim));
+            verdicts.Add(new Verdict("app configs", "no match in PowerToys, ShareX, OBS, AutoHotkey or Raycast", Paints.Dim));
         else
             foreach (var d in matches)
                 verdicts.Add(new Verdict("app configs", $"{d.App} - {d.What}\n{d.Source}", Paints.Warn));
@@ -228,7 +228,7 @@ public partial class MainWindow : Window
         });
 
         declared = result.Declared;
-        var byCombo = declared.GroupBy(d => d.Combo).ToDictionary(g => g.Key, g => g.First());
+        var byCombo = declared.Where(d => d.Text == null).GroupBy(d => d.Combo).ToDictionary(g => g.Key, g => g.First());
 
         all.Clear();
         int unknown = 0;
@@ -250,6 +250,8 @@ public partial class MainWindow : Window
         foreach (var (combo, d) in byCombo)
             if (!result.Taken.Contains(combo))
                 all.Add(new Row(combo.ToString(), $"{d.App} - {d.What}  (keyboard hook, nothing reserved)", false));
+        foreach (var d in declared.Where(d => d.Text != null))
+            all.Add(new Row(d.Text!, $"{d.App} - {d.What}  (keyboard hook - only \"Press it\" can confirm)", false));
 
         ApplyFilter();
         ScanButton.IsEnabled = true;

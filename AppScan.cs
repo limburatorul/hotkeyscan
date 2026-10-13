@@ -6,7 +6,8 @@ using System.Text.RegularExpressions;
 namespace HotkeyScan;
 
 /// A hotkey an application declares in its own configuration.
-internal record Declared(string App, string What, Combo Combo, string Source);
+/// Text is set when the binding has no plain Combo (a double-tap, or a line we could not parse).
+internal record Declared(string App, string What, Combo Combo, string Source, string? Text = null);
 
 /// An application known to take hotkeys, and how it takes them.
 internal record KnownApp(string Process, string Name, string Mechanism, string Defaults);
@@ -55,6 +56,8 @@ internal static class AppScan
         new("rainmeter", "Rainmeter", "RegisterHotKey", "per-skin bindings"),
         new("bandicam", "Bandicam", "RegisterHotKey", "F12 record, F11 capture"),
         new("copyq", "CopyQ", "RegisterHotKey", "its clipboard hotkeys"),
+        new("raycast", "Raycast", "hook", "Alt+Space opens it; your own hotkeys are read from its log"),
+        new("raycast.uiaccess", "Raycast", "hook", "Alt+Space opens it; your own hotkeys are read from its log"),
         new("idman", "Internet Download Manager", "hook", "Ctrl+Alt+D, Ctrl+F10"),
     };
 
@@ -78,7 +81,61 @@ internal static class AppScan
         Safe(() => ShareX(found));
         Safe(() => Obs(found));
         Safe(() => AutoHotkey(found));
+        Safe(() => Raycast(found));
         return found;
+    }
+
+    /// Raycast v2 encrypts its settings, but its log lists every binding at startup:
+    /// "Binding 0 (DoubleTap(DoubleTapHotkey(BitFlags<Modifier>(0b11000000, LeftWin | RightWin)))) dispatches via ...".
+    // ponytail: only the double-tap line format is confirmed; key lookup for normal combos is a liberal guess.
+    private static void Raycast(List<Declared> found)
+    {
+        var dir = new DirectoryInfo(Path.Combine(Local, "Raycast", "Logs"));
+        if (!dir.Exists) return;
+        var log = dir.GetFiles("Raycast-Production-*.log").OrderByDescending(f => f.LastWriteTimeUtc).FirstOrDefault();
+        if (log == null) return;
+
+        string[] lines;
+        using (var fs = new FileStream(log.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        using (var r = new StreamReader(fs))
+            lines = r.ReadToEnd().Split('\n');
+
+        int start = Array.FindLastIndex(lines, l => Regex.IsMatch(l, @"Raycast v\S+ \w+ started"));
+        var bindings = new List<Declared>();
+        foreach (var line in lines.Skip(start + 1))
+        {
+            var m = Regex.Match(line, @"Binding (\d+) \((.*)\) dispatches via");
+            if (!m.Success) continue;
+            string debug = m.Groups[2].Value;
+
+            var mods = KeyMods.None;
+            uint vk = 0;
+            foreach (Match w in Regex.Matches(debug, @"\b[A-Za-z][A-Za-z0-9]*\b"))
+            {
+                string t = w.Value;
+                switch (t)
+                {
+                    case "LeftWin" or "RightWin" or "Win" or "Meta": mods |= KeyMods.Win; continue;
+                    case "LeftControl" or "RightControl" or "Control" or "Ctrl": mods |= KeyMods.Ctrl; continue;
+                    case "LeftAlt" or "RightAlt" or "Alt": mods |= KeyMods.Alt; continue;
+                    case "LeftShift" or "RightShift" or "Shift": mods |= KeyMods.Shift; continue;
+                }
+                if (vk != 0) continue;
+                string key = Regex.Replace(t, @"^(Key|Digit)(?=\w)", "");
+                if (key.Length > 1 && key == key.ToLowerInvariant()) continue; // skip words like "via"
+                if (Keys.TryParse(key, out var k)) vk = k.Vk;
+            }
+
+            string what = "binding " + m.Groups[1].Value;
+            string modText = new Combo(mods, 0).ToString().Replace("VK_00", "").TrimEnd('+');
+            if (debug.StartsWith("DoubleTap") && mods != KeyMods.None)
+                bindings.Add(new Declared("Raycast", what, default, log.FullName, "double-tap " + modText));
+            else if (vk != 0)
+                bindings.Add(new Declared("Raycast", what, new Combo(mods, vk), log.FullName));
+            else
+                bindings.Add(new Declared("Raycast", what, default, log.FullName, debug));
+        }
+        found.AddRange(bindings);
     }
 
     /// One unreadable or reshaped config must not take the whole report down with it.

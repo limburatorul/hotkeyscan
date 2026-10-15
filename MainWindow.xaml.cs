@@ -57,7 +57,21 @@ public partial class MainWindow : Window
         VerdictList.ItemsSource = verdicts;
         Results.ItemsSource = shown;
         Loaded += Load;
+        Loaded += async (_, _) => await CheckForUpdate();
+        // the app may stay open for days: a release published meanwhile is fetched too
+        var again = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromHours(6) };
+        again.Tick += async (_, _) => await CheckForUpdate();
+        again.Start();
     }
+
+    private async Task CheckForUpdate()
+    {
+        if (await Updater.UpdateInPlace() is not { } version) return;
+        UpdateLine.Text = $"HotkeyScan {version} is downloaded and checked. It starts the next time you open HotkeyScan.";
+        UpdateLine.Visibility = Visibility.Visible;
+    }
+
+    private void ShowOffer() => OfferLine.Visibility = Visibility.Visible;
 
     private async void Load(object sender, RoutedEventArgs e)
     {
@@ -127,6 +141,7 @@ public partial class MainWindow : Window
     private void Check_Click(object sender, RoutedEventArgs e)
     {
         if (current is not Combo combo) return;
+        ShowOffer();
 
         verdicts.Clear();
         VerdictCard.Visibility = Visibility.Visible;
@@ -398,6 +413,7 @@ public partial class MainWindow : Window
         ScanButton.IsEnabled = true;
         Status.Text = $"{result.Taken.Count} of {combos.Count} combinations are taken, {unknown} of them by an owner Windows will not name. "
             + "Double-click a row to load it, then \"Press it\" to see who answers.";
+        ShowOffer();
     }
 
     private KeyMonitor? monitor;

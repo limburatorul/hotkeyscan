@@ -33,6 +33,12 @@
           · <Hyperlink NavigateUri="https://protagonistlabs.app/hotkeyscan/?utm_source=hotkeyscan&amp;utm_medium=app&amp;utm_campaign=header" RequestNavigate="Link_Navigate">Website</Hyperlink>
           · <Hyperlink NavigateUri="https://protagonistlabs.app/?utm_source=hotkeyscan&amp;utm_medium=app&amp;utm_campaign=more-apps" RequestNavigate="Link_Navigate">More apps from Protagonist Labs</Hyperlink>
         </TextBlock>
+        <!-- shown once HotkeyScan has answered something: one app we make, with a code for its users -->
+        <TextBlock x:Name="OfferLine" Style="{StaticResource Hint}" Margin="0,2,0,0" Visibility="Collapsed">
+          <TextBlock.Resources><Style TargetType="Hyperlink"><Setter Property="Foreground" Value="{StaticResource Accent}"/></Style></TextBlock.Resources>
+          Play PC games? <Hyperlink NavigateUri="https://protagonistlabs.app/shelf/?code=FREEAPP30&amp;utm_source=hotkeyscan&amp;utm_medium=app&amp;utm_campaign=recommend#pricing" RequestNavigate="Link_Navigate">Shelf</Hyperlink>, our game library that also backs up your saves, is 30% off for HotkeyScan users.
+        </TextBlock>
+        <TextBlock x:Name="UpdateLine" Style="{StaticResource Hint}" Margin="0,2,0,0" Visibility="Collapsed"/>
       </StackPanel>
     </DockPanel>
 

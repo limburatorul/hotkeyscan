@@ -5,6 +5,7 @@ using System.Security.Principal;
 using System.Text.RegularExpressions;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -57,6 +58,7 @@ public partial class MainWindow : Window
         VerdictList.ItemsSource = verdicts;
         Results.ItemsSource = shown;
         Loaded += Load;
+        Task.Run(Ecosystem.WriteCard);
         Loaded += async (_, _) => await CheckForUpdate();
         // the app may stay open for days: a release published meanwhile is fetched too
         var again = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromHours(6) };
@@ -93,6 +95,67 @@ public partial class MainWindow : Window
 
         Status.Text = $"{apps.Count} known apps running, {declared.Count} hotkeys read out of their configs.";
         HotkeyBox.Focus();
+
+        // HotkeyScan --check "Alt+Space": a sister app couldn't register that combination, so the
+        // question is who holds it - check at once and point at Find the owner.
+        var args = Environment.GetCommandLineArgs();
+        int at = Array.IndexOf(args, "--check");
+        if (at > 0 && at + 1 < args.Length)
+        {
+            HotkeyBox.Text = args[at + 1].Trim();
+            if (current is Combo combo)
+            {
+                Check_Click(this, e);
+                FindButton.Style = (Style)FindResource("Primary");
+                CheckButton.ClearValue(StyleProperty);
+                FindButton.Focus();
+                Status.Text = $"Another app couldn't register {combo}. Find the owner names the program holding it.";
+            }
+        }
+
+        var cards = await Task.Run(() => Ecosystem.Sisters.Concat(Ecosystem.Paid).DistinctBy(s => s.Id)
+            .Select(s => (s.Id, Card: Ecosystem.ReadCard(s.Id))).Where(c => c.Card != null).ToDictionary(c => c.Id, c => c.Card!));
+        ShowWorksWith(cards);
+    }
+
+    /// The sisters that send their taken hotkeys here, and, for someone who bought one of our paid apps,
+    /// one quiet line with 30% off the paid ones not installed.
+    private void ShowWorksWith(Dictionary<string, Ecosystem.Card> cards)
+    {
+        Inline Link(string name, string url)
+        {
+            var link = new Hyperlink(new Run(name)) { NavigateUri = new Uri(url) };
+            link.RequestNavigate += Link_Navigate;
+            return link;
+        }
+
+        var lines = new List<List<Inline>>();
+        foreach (var (id, name) in Ecosystem.Sisters.Where(s => cards.ContainsKey(s.Id)))
+            lines.Add(new() { new Run(name), new Run(" · sends a hotkey it can't register here") });
+        foreach (var (id, name) in Ecosystem.Sisters.Where(s => !cards.ContainsKey(s.Id)).Take(3))
+            lines.Add(new() { Link(name, Ecosystem.Page(id, null)), new Run(" · would send a hotkey it can't register here") });
+
+        if (cards.Values.Any(c => c.Paid && c.Edition == "full"))
+        {
+            var offers = Ecosystem.Paid.Where(p => !cards.ContainsKey(p.Id)).Take(4).ToList();
+            if (offers.Count > 0)
+            {
+                var line = new List<Inline> { new Run("Owners of one of our apps get 30% off the others: ") };
+                for (int i = 0; i < offers.Count; i++)
+                {
+                    if (i > 0) line.Add(new Run(" · "));
+                    line.Add(Link(offers[i].Name, Ecosystem.Page(offers[i].Id, offers[i].Id == "shelf" ? "SECOND30SHELF" : "SECOND30")));
+                }
+                lines.Add(line);
+            }
+        }
+
+        WorksText.Inlines.Clear();
+        foreach (var line in lines)
+        {
+            if (WorksText.Inlines.Count > 0) WorksText.Inlines.Add(new LineBreak());
+            WorksText.Inlines.AddRange(line);
+        }
     }
 
     // ---------- the combination ----------

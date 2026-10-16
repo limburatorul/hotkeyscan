@@ -60,8 +60,8 @@ public partial class MainWindow : Window
         Loaded += Load;
         Task.Run(Ecosystem.WriteCard);
         Loaded += async (_, _) => await CheckForUpdate();
-        // the app may stay open for days: a release published meanwhile is fetched too
-        var again = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromHours(6) };
+        // the app may stay open for days: a release published meanwhile is fetched within the hour
+        var again = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromHours(1) };
         again.Tick += async (_, _) => await CheckForUpdate();
         again.Start();
     }

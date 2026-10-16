@@ -15,14 +15,22 @@ internal static class Updater
     private const string Repo = "limburatorul/hotkeyscan", Asset = "HotkeyScan.exe";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(60) };
 
+    private static Version? waiting;
+
     public static Version Current => typeof(Updater).Assembly.GetName().Version is { } v ? new Version(v.Major, v.Minor, v.Build) : new Version(0, 0, 0);
 
     /// <summary>The version now waiting for the next start, or null when there was nothing to do.</summary>
     public static async Task<Version?> UpdateInPlace()
     {
+        // Already swapped in: the running copy is now the .old file, so a second download could never be
+        // swapped in and would only cost another 66 MB every check. Nothing more until the next start.
+        if (waiting is not null) return waiting;
         var exe = Environment.ProcessPath;
-        // Run from source (dotnet.exe) or renamed by the user: not a copy this can replace.
-        if (exe is null || !Path.GetFileName(exe).Equals(Asset, StringComparison.OrdinalIgnoreCase)) return null;
+        // Only the published single-file exe replaces itself (under any name the user saved it as);
+        // run from source or a build folder, Location is the HotkeyScan.dll beside it.
+#pragma warning disable IL3000   // empty in a single-file app: exactly what is tested here
+        if (exe is null || typeof(Updater).Assembly.Location != "") return null;
+#pragma warning restore IL3000
         try { File.Delete(exe + ".old"); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
 
         var fresh = exe + ".new";
@@ -55,7 +63,7 @@ internal static class Updater
             File.Move(exe, exe + ".old", overwrite: true);
             try { File.Move(fresh, exe); }
             catch { File.Move(exe + ".old", exe); throw; }   // never leave the folder without its .exe
-            return latest;
+            return waiting = latest;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException
                                        or InvalidOperationException or IOException or UnauthorizedAccessException)

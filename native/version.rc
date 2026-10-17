@@ -1,0 +1,52 @@
+// Version resource for hook64.dll, hook32.dll and host32.exe: they travel inside HotkeyScan.exe,
+// and a PE that says nothing about itself is what antivirus heuristics flag first.
+// build.cmd passes which binary (HOOK64, HOOK32 or HOST32) and the version from HotkeyScan.csproj
+// as VER (1.0.9) and VER_NUM (1,0,9,0).
+#include <winver.h>
+
+#define STR2(x) #x
+#define STR(x) STR2(x)
+#define VER_STR STR(VER)
+
+#if defined(HOOK64)
+#define FILE_NAME "hook64.dll"
+#define FILE_DESC "HotkeyScan owner finder hook (64-bit)"
+#define FILE_TYPE VFT_DLL
+#elif defined(HOOK32)
+#define FILE_NAME "hook32.dll"
+#define FILE_DESC "HotkeyScan owner finder hook (32-bit)"
+#define FILE_TYPE VFT_DLL
+#else
+#define FILE_NAME "host32.exe"
+#define FILE_DESC "HotkeyScan owner finder for 32-bit programs"
+#define FILE_TYPE VFT_APP
+#endif
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION VER_NUM
+PRODUCTVERSION VER_NUM
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+FILEFLAGS 0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE FILE_TYPE
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName", "Protagonist Labs"
+            VALUE "FileDescription", FILE_DESC
+            VALUE "FileVersion", VER_STR
+            VALUE "InternalName", FILE_NAME
+            VALUE "LegalCopyright", "Copyright (c) 2026 Protagonist Labs. MIT licence"
+            VALUE "OriginalFilename", FILE_NAME
+            VALUE "ProductName", "HotkeyScan"
+            VALUE "ProductVersion", VER_STR
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

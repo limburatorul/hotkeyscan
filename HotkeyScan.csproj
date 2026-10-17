@@ -9,9 +9,16 @@
     <RootNamespace>HotkeyScan</RootNamespace>
     <AssemblyName>HotkeyScan</AssemblyName>
 
-    <Version>1.0.8</Version>
+    <Version>1.0.9</Version>
     <Product>HotkeyScan</Product>
+    <AssemblyTitle>HotkeyScan</AssemblyTitle>
     <Description>Finds which running program is holding a hotkey</Description>
+    <Company>Protagonist Labs</Company>
+    <Authors>Protagonist Labs</Authors>
+    <Copyright>Copyright (c) 2026 Protagonist Labs. MIT licence</Copyright>
+    <!-- Who it is and what it may do: an exe that says neither is what antivirus heuristics flag first. -->
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
 
     <!-- One self-contained file: it has to run on a PC with no .NET installed.
          No InvariantGlobalization: WPF reads the input language culture and dies without it. -->
@@ -31,8 +38,8 @@
   </ItemGroup>
 
   <Target Name="BuildNativeHook" BeforeTargets="BeforeBuild"
-          Inputs="native\hook.c;native\host32.c;native\build.cmd" Outputs="@(NativeHook)">
-    <Exec Command="&quot;$(MSBuildProjectDirectory)\native\build.cmd&quot;"/>
+          Inputs="native\hook.c;native\host32.c;native\version.rc;native\build.cmd;$(MSBuildProjectFile)" Outputs="@(NativeHook)">
+    <Exec Command="&quot;$(MSBuildProjectDirectory)\native\build.cmd&quot; $(Version)"/>
   </Target>
 
 </Project>

@@ -10,7 +10,7 @@ namespace HotkeyScan;
 /// missing, malformed or points at an exe that is gone just means that app isn't installed.
 internal static class Ecosystem
 {
-    private static readonly string Apps = Path.Combine(
+    internal static readonly string Apps = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ProtagonistLabs", "apps");
 
     public record Card(string Name, bool Paid, string Edition);
@@ -45,13 +45,27 @@ internal static class Ecosystem
 
     public static Card? ReadCard(string id)
     {
+        if (Load(Path.Combine(Apps, id + ".json")) is not { } card) return null;
+        return new Card((string)card["name"]!, card["paid"] is JsonValue p && p.TryGetValue(out bool paid) && paid,
+                        card["edition"] is JsonValue e && e.TryGetValue(out string? edition) ? edition : "");
+    }
+
+    /// A card is a few hundred bytes; anything past this is not one, and is not read into memory.
+    private const long MaxCard = 64 * 1024;
+
+    /// A sister's card when it is one we can trust to describe an installed app: schema 1, a name, and an exe
+    /// that exists on a drive of this PC. Anything else, missing or hostile, is null - never an exception.
+    internal static JsonObject? Load(string file)
+    {
         try
         {
-            var node = JsonNode.Parse(File.ReadAllText(Path.Combine(Apps, id + ".json")));
-            if (node?["schema"]?.GetValue<int>() != 1) return null;
-            string? name = (string?)node["name"], exe = (string?)node["exe"];
-            if (name is null || exe is null || !File.Exists(exe)) return null;
-            return new Card(name, node["paid"]?.GetValue<bool>() == true, (string?)node["edition"] ?? "");
+            if (new FileInfo(file).Length > MaxCard) return null;
+            // ReadAllText drops a UTF-8 BOM, which an editor may have added and JsonNode would refuse.
+            if (JsonNode.Parse(File.ReadAllText(file)) is not JsonObject card) return null;
+            if (card["schema"] is not JsonValue schema || !schema.TryGetValue(out int version) || version != 1) return null;
+            if (card["name"] is not JsonValue n || !n.TryGetValue(out string? name) || name.Length is 0 or > 64) return null;
+            if (card["exe"] is not JsonValue x || !x.TryGetValue(out string? exe) || !IsLocalPath(exe) || !File.Exists(exe)) return null;
+            return card;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException
                                        or InvalidOperationException or FormatException or ArgumentException)
@@ -59,6 +73,13 @@ internal static class Ecosystem
             return null;
         }
     }
+
+    /// A full path on a drive of this PC. A UNC or device path (\\server\..., \\.\..., //server/...) is refused
+    /// before File.Exists, which would otherwise reach out over the network for a stranger's card: Frostpane
+    /// measured 21 s for a //host/share exe.
+    private static bool IsLocalPath(string path) =>
+        Path.IsPathFullyQualified(path) && !path.StartsWith(@"\\") && !path.StartsWith("//")
+        && !path.StartsWith(@"\/") && !path.StartsWith(@"/\");
 
     /// The sisters that hand HotkeyScan their taken hotkeys.
     public static readonly (string Id, string Name)[] Sisters = { ("lume", "Lume"), ("frostpane", "Frostpane"), ("autoclicker", "Auto Clicker") };

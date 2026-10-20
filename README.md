@@ -22,6 +22,11 @@ installed. Double-click and it starts.
   combination, HotkeyScan version, Windows build and the names of running processes); delete any
   line, then it opens your mail app addressed to feedback@protagonistlabs.app. Nothing is sent by
   HotkeyScan, and it never connects to the internet.
+- **Our own apps** — Lume, Frostpane and Auto Clicker list their hotkeys on their Protagonist Labs
+  cards (`%APPDATA%\ProtagonistLabs\apps`). When two of them want the same combination, Check, the
+  scan list and the status line say so once: *Lume and Frostpane both use Alt+Space — change it in
+  one of them*. A card that says its app holds a hotkey is compared with the live probe, so one left
+  behind by a crash reads *nothing holds it now*.
 
 ## Find the owner — how it works
 
@@ -92,7 +97,7 @@ Only the modifiers and the key you pick in the box are logged — not everything
 2. **The Windows table** — the shortcuts the system reserves, so they don't show up as
    "owner unknown" next to the real culprits.
 3. **Application configs** — reads the hotkeys declared by PowerToys, ShareX, OBS and running
-   AutoHotkey scripts, plus Raycast's log.
+   AutoHotkey scripts, plus Raycast's log and the cards of our own apps.
 4. **Find the owner** — catches the `WM_HOTKEY` Windows posts to whoever registered the combination,
    so it names any `RegisterHotKey` owner, listed above or not.
 5. **The empirical test** — actually presses the combination and watches which window, focus,
@@ -127,7 +132,9 @@ dotnet publish -c Release -o dist
 | `OwnerFinder.cs` | Find the owner: extracts the hook, installs it, waits for the hit |
 | `native\hook.c`, `native\host32.c` | the `WH_GETMESSAGE` hook DLL and the 32-bit host |
 | `Remaps.cs` | Scancode Map, PowerToys Keyboard Manager, Sticky/Filter Keys |
-| `AppScan.cs` | PowerToys / ShareX / OBS / AutoHotkey configs and known apps |
+| `AppScan.cs` | PowerToys / ShareX / OBS / AutoHotkey configs, our apps' cards, known apps |
+| `Ecosystem.cs` | the Protagonist Labs card: writing ours, reading the others (untrusted) |
+| `tests\` | card-reader tests on synthetic folders: `dotnet run --project tests` |
 
 ## Licence
 

@@ -94,6 +94,8 @@ public partial class MainWindow : Window
             a.Mechanism == "hook" ? Paints.Warn : Paints.Dim));
 
         Status.Text = $"{apps.Count} known apps running, {declared.Count} hotkeys read out of their configs.";
+        // two of our apps on one combination is a fact HotkeyScan already knows, so it says so without being asked
+        foreach (var clash in AppScan.Clashes(declared).Values) Status.Text += $" {clash}.";
         HotkeyBox.Focus();
 
         // HotkeyScan --check "Alt+Space": a sister app couldn't register that combination, so the
@@ -131,7 +133,7 @@ public partial class MainWindow : Window
 
         var lines = new List<List<Inline>>();
         foreach (var (id, name) in Ecosystem.Sisters.Where(s => cards.ContainsKey(s.Id)))
-            lines.Add(new() { new Run(name), new Run(" · sends a hotkey it can't register here") });
+            lines.Add(new() { new Run(name), new Run(" · sends a hotkey it can't register here, and its own are checked against our other apps") });
         foreach (var (id, name) in Ecosystem.Sisters.Where(s => !cards.ContainsKey(s.Id)).Take(3))
             lines.Add(new() { Link(name, Ecosystem.Page(id, null)), new Run(" · would send a hotkey it can't register here") });
 
@@ -223,11 +225,14 @@ public partial class MainWindow : Window
             : new Verdict("Windows", "not a system shortcut", Paints.Dim));
 
         var matches = declared.Where(d => d.Combo == combo).ToList();
+        bool clash = AppScan.Clashes(matches).TryGetValue(combo, out var clashText);
+        if (clash) verdicts.Add(new Verdict("our apps", clashText!, Paints.Bad));
         if (matches.Count == 0)
-            verdicts.Add(new Verdict("app configs", "no match in PowerToys, ShareX, OBS, AutoHotkey or Raycast", Paints.Dim));
+            verdicts.Add(new Verdict("app configs", "no match in PowerToys, ShareX, OBS, AutoHotkey, Raycast or our apps' cards", Paints.Dim));
         else
-            foreach (var d in matches)
-                verdicts.Add(new Verdict("app configs", $"{d.App} - {d.What}\n{d.Source}", Paints.Warn));
+            foreach (var d in matches.Where(d => !(clash && d.Source == AppScan.CardSource)))
+                verdicts.Add(new Verdict("app configs", $"{d.App} - {d.What}"
+                    + (Held(d, probe == Probe.Taken) is { } held ? $" ({held})" : "") + $"\n{d.Source}", Paints.Warn));
 
         if (probe == Probe.Taken && !Reserved.TryGet(combo, out _) && matches.Count == 0)
         {
@@ -240,6 +245,17 @@ public partial class MainWindow : Window
             verdicts.Add(new Verdict("hook suspects",
                 string.Join(", ", hooks) + " - they take keys without reserving them, so only \"Press it\" can catch them", Paints.Dim));
     }
+
+    /// Our apps' cards say whether they hold their combination, but that is only a declaration: one that
+    /// crashed leaves "registered": true behind. The probe is the live answer, so the two are read together.
+    private static string? Held(Declared d, bool taken) => (d.Registered, taken) switch
+    {
+        (true, false) => "its card says it holds it, but nothing does now: it isn't running, or it stopped without updating its card",
+        (false, true) => "it could not register it: something else holds it",
+        (false, false) => "it could not register it; nothing holds it now, so restarting it should",
+        (null, false) => "not held right now",
+        _ => null,
+    };
 
     /// The only way to catch a keyboard hook: press the combination and watch what moves.
     private async void Press_Click(object sender, RoutedEventArgs e)
@@ -440,14 +456,19 @@ public partial class MainWindow : Window
 
         var result = await Task.Run(() =>
         {
+            var found = AppScan.DeclaredHotkeys();
+            // declared combinations outside the sweep (Alt+Space, a bare F6) are probed too, or they'd read as hooks
             var taken = new HashSet<Combo>();
-            foreach (var combo in combos)
+            foreach (var combo in combos.Concat(found.Where(d => d.Text == null).Select(d => d.Combo)).Distinct())
                 if (Win32.TryClaim(combo, out _) == Probe.Taken) taken.Add(combo);
-            return (Taken: taken, Declared: AppScan.DeclaredHotkeys());
+            return (Taken: taken, Declared: found);
         });
 
         declared = result.Declared;
-        var byCombo = declared.Where(d => d.Text == null).GroupBy(d => d.Combo).ToDictionary(g => g.Key, g => g.First());
+        var clashes = AppScan.Clashes(declared);
+        var byCombo = declared.Where(d => d.Text == null && !clashes.ContainsKey(d.Combo))
+            .GroupBy(d => d.Combo).ToDictionary(g => g.Key, g => g.First());
+        var swept = combos.ToHashSet();
 
         all.Clear();
         int unknown = 0;
@@ -455,6 +476,7 @@ public partial class MainWindow : Window
         {
             if (!result.Taken.Contains(combo)) continue;
 
+            if (clashes.ContainsKey(combo)) continue;   // listed once, below
             if (Reserved.TryGet(combo, out var what))
                 all.Add(new Row(combo.ToString(), "Windows - " + what, false));
             else if (byCombo.TryGetValue(combo, out var d))
@@ -466,15 +488,21 @@ public partial class MainWindow : Window
             }
         }
 
+        foreach (var (combo, text) in clashes)
+            all.Add(new Row(combo.ToString(), text, false));
         foreach (var (combo, d) in byCombo)
-            if (!result.Taken.Contains(combo))
-                all.Add(new Row(combo.ToString(), $"{d.App} - {d.What}  (keyboard hook, nothing reserved)", false));
+        {
+            bool taken = result.Taken.Contains(combo);
+            if (taken && swept.Contains(combo)) continue;   // already listed with the sweep
+            string? note = d.Source == AppScan.CardSource ? Held(d, taken) : taken ? null : "keyboard hook, nothing reserved";
+            all.Add(new Row(combo.ToString(), $"{d.App} - {d.What}" + (note is null ? "" : $"  ({note})"), false));
+        }
         foreach (var d in declared.Where(d => d.Text != null))
             all.Add(new Row(d.Text!, $"{d.App} - {d.What}  (keyboard hook - only \"Press it\" can confirm)", false));
 
         ApplyFilter();
         ScanButton.IsEnabled = true;
-        Status.Text = $"{result.Taken.Count} of {combos.Count} combinations are taken, {unknown} of them by an owner Windows will not name. "
+        Status.Text = $"{result.Taken.Count(swept.Contains)} of {combos.Count} combinations are taken, {unknown} of them by an owner Windows will not name. "
             + "Double-click a row to load it, then \"Press it\" to see who answers.";
         ShowOffer();
     }

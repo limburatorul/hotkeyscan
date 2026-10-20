@@ -1,13 +1,15 @@
 using System.IO;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
 namespace HotkeyScan;
 
 /// A hotkey an application declares in its own configuration.
 /// Text is set when the binding has no plain Combo (a double-tap, or a line we could not parse).
-internal record Declared(string App, string What, Combo Combo, string Source, string? Text = null);
+/// Registered is set only for our own apps, whose cards say whether they hold the combination.
+internal record Declared(string App, string What, Combo Combo, string Source, string? Text = null, bool? Registered = null);
 
 /// An application known to take hotkeys, and how it takes them.
 internal record KnownApp(string Process, string Name, string Mechanism, string Defaults);
@@ -82,8 +84,48 @@ internal static class AppScan
         Safe(() => Obs(found));
         Safe(() => AutoHotkey(found));
         Safe(() => Raycast(found));
+        Safe(() => found.AddRange(Studio(Ecosystem.Apps)));
         return found;
     }
+
+    public const string CardSource = "Protagonist Labs card";
+
+    /// Lume, Frostpane and Auto Clicker list the hotkeys they register on their cards as
+    /// hotkeys:[{combo, does, registered}]. Any card may do it; each is another app's file, so untrusted.
+    public static List<Declared> Studio(string folder)
+    {
+        var found = new List<Declared>();
+        if (!Directory.Exists(folder)) return found;
+        foreach (var file in Directory.EnumerateFiles(folder, "*.json"))
+        {
+            if (Ecosystem.Load(file) is not { } card) continue;
+            // a real card declares one or two; more than 16 is not a card we want rows from
+            if (card["hotkeys"] is not JsonArray list || list.Count > 16) continue;
+            string name = (string)card["name"]!;
+            foreach (var entry in list)
+            {
+                if (entry is not JsonObject e) continue;
+                if (e["combo"] is not JsonValue c || !c.TryGetValue(out string? text)
+                    || text.Length > 64 || !Keys.TryParse(text, out var combo)) continue;
+                if (e["does"] is not JsonValue d || !d.TryGetValue(out string? does)
+                    || does.Length is 0 or > 200) continue;
+                bool? registered = e["registered"] is JsonValue r && r.TryGetValue(out bool b) ? b : null;
+                found.Add(new Declared(name, does, combo, CardSource, null, registered));
+            }
+        }
+        return found;
+    }
+
+    /// Two of our own apps on one combination: only one of them can have it, and the user picks which.
+    /// The line is the same in Check and in the scan list.
+    public static Dictionary<Combo, string> Clashes(IEnumerable<Declared> declared) =>
+        declared.Where(d => d.Source == CardSource)
+            .GroupBy(d => d.Combo)
+            .Select(g => (g.Key, Names: g.Select(d => d.App).Distinct().ToList()))
+            .Where(g => g.Names.Count > 1)
+            .ToDictionary(g => g.Key, g => g.Names.Count == 2
+                ? $"{g.Names[0]} and {g.Names[1]} both use {g.Key} — change it in one of them"
+                : $"{string.Join(", ", g.Names.SkipLast(1))} and {g.Names[^1]} all use {g.Key} — change it in all but one of them");
 
     /// Raycast v2 encrypts its settings, but its log lists every binding at startup:
     /// "Binding 0 (DoubleTap(DoubleTapHotkey(BitFlags<Modifier>(0b11000000, LeftWin | RightWin)))) dispatches via ...".

@@ -1,6 +1,8 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
+using Microsoft.Win32;
 
 namespace HotkeyScan;
 
@@ -12,6 +14,11 @@ internal static class Ecosystem
 {
     internal static readonly string Apps = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ProtagonistLabs", "apps");
+
+    /// Everything HotkeyScan keeps (since 1.2 only which What's new it has shown), in the studio's folder.
+    /// HotkeyScan is one portable exe and kept nothing before, so nothing moves.
+    internal static readonly string Data = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ProtagonistLabs", "HotkeyScan");
 
     public record Card(string Name, bool Paid, string Edition);
 
@@ -32,6 +39,7 @@ internal static class Ecosystem
             ["paid"] = false,
             ["page"] = "https://protagonistlabs.app/hotkeyscan/",
             ["commands"] = new JsonObject { ["check"] = new JsonArray("--check", "{combo}") },
+            ["data"] = Data,
         };
         var file = Path.Combine(Apps, "hotkeyscan.json");
         try
@@ -48,6 +56,34 @@ internal static class Ecosystem
         if (Load(Path.Combine(Apps, id + ".json")) is not { } card) return null;
         return new Card((string)card["name"]!, card["paid"] is JsonValue p && p.TryGetValue(out bool paid) && paid,
                         card["edition"] is JsonValue e && e.TryGetValue(out string? edition) ? edition : "");
+    }
+
+    /// The version on the card the last run wrote, read before this run rewrites it: what HotkeyScan was before an update.
+    public static string? PreviousVersion() =>
+        Load(Path.Combine(Apps, "hotkeyscan.json"))?["version"] is JsonValue v && v.TryGetValue(out string? version) ? version : null;
+
+    /// A sister with no card yet (installed, never started): its Uninstall entry, per-machine in either registry view
+    /// or per-user, by display name ("Lume", or Electron's "Lume 0.4.0") with an exe on a drive of this PC.
+    public static bool HasUninstallEntry(string name)
+    {
+        var displayName = new Regex($@"^{Regex.Escape(name)}( \d[\d.]*)?$", RegexOptions.IgnoreCase);
+        foreach (var (hive, view) in new[] { (RegistryHive.LocalMachine, RegistryView.Registry64), (RegistryHive.LocalMachine, RegistryView.Registry32),
+                                             (RegistryHive.CurrentUser, RegistryView.Default) })
+        {
+            try
+            {
+                using var root = RegistryKey.OpenBaseKey(hive, view);
+                using var uninstall = root.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall");
+                foreach (var sub in uninstall?.GetSubKeyNames() ?? [])
+                {
+                    using var app = uninstall!.OpenSubKey(sub);
+                    if (app?.GetValue("DisplayName") is string dn && displayName.IsMatch(dn) && app.GetValue("DisplayIcon") is string icon
+                        && icon.Split(',')[0].Trim('"') is var exe && IsLocalPath(exe) && File.Exists(exe)) return true;
+                }
+            }
+            catch (Exception ex) when (ex is System.Security.SecurityException or IOException or UnauthorizedAccessException) { }
+        }
+        return false;
     }
 
     /// A card is a few hundred bytes; anything past this is not one, and is not read into memory.

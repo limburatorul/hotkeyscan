@@ -81,6 +81,19 @@ Check(read?.SingleOrDefault(d => d.App == "Entries") is { What: "kept", Register
 Check(watch.ElapsedMilliseconds < 2000, $"UNC and device exes refused without touching the network: {watch.ElapsedMilliseconds} ms for the whole folder");
 Check(AppScan.Studio(Path.Combine(root, "no such folder")).Count == 0, "a missing apps folder is no hotkeys");
 
+// Works with falls back to the Uninstall entries for a sister with no card yet; a name nobody installed is not found.
+Check(!Ecosystem.HasUninstallEntry("No Such App 9"), "uninstall entries: an app nobody installed is not found");
+
+// What's new reads whatsnew.txt from the exe: every release header parses, newest first.
+using (var notes = new StreamReader(typeof(Updater).Assembly.GetManifestResourceStream("HotkeyScan.whatsnew.txt")!))
+{
+    var heads = notes.ReadToEnd().Split('\n').Where(l => l.StartsWith("## ")).Select(l => l[3..].Split(" | ", 3)).ToList();
+    bool parsed = heads.Count > 0 && heads.All(h => h.Length == 3 && Version.TryParse(h[0].Trim(), out _)
+        && DateTime.TryParseExact(h[1].Trim(), "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.None, out _));
+    Check(parsed, "what's new: every release header parses");
+    Check(parsed && heads.Zip(heads.Skip(1)).All(p => Version.Parse(p.First[0].Trim()) > Version.Parse(p.Second[0].Trim())), "what's new: newest first");
+}
+
 Directory.Delete(root, true);
 Console.WriteLine(failures == 0 ? "all passed" : $"{failures} failed");
 return failures == 0 ? 0 : 1;

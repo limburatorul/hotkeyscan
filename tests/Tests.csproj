@@ -11,5 +11,6 @@
     <Compile Include="..\Ecosystem.cs" />
     <Compile Include="..\Win32.cs" />
     <Compile Include="..\Updater.cs" />
+    <EmbeddedResource Include="..\whatsnew.txt" LogicalName="HotkeyScan.whatsnew.txt" />
   </ItemGroup>
 </Project>

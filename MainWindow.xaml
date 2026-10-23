@@ -23,6 +23,9 @@
       <Button DockPanel.Dock="Right" Content="Key monitor" VerticalAlignment="Center"
               Margin="0,0,2,0" Click="Monitor_Click"
               ToolTip="For a key that misbehaves on its own, not a whole shortcut."/>
+      <Button DockPanel.Dock="Right" Content="What's new" VerticalAlignment="Center"
+              Margin="0,0,8,0" Click="WhatsNew_Click"
+              ToolTip="Every HotkeyScan release and what it changed."/>
       <StackPanel>
         <TextBlock Text="HotkeyScan" FontSize="20" FontWeight="SemiBold"/>
         <TextBlock Style="{StaticResource Hint}" Margin="0,2,0,0"

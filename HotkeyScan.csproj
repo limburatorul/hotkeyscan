@@ -9,7 +9,7 @@
     <RootNamespace>HotkeyScan</RootNamespace>
     <AssemblyName>HotkeyScan</AssemblyName>
 
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Product>HotkeyScan</Product>
     <AssemblyTitle>HotkeyScan</AssemblyTitle>
     <Description>Finds which running program is holding a hotkey</Description>
@@ -34,6 +34,11 @@
   <!-- The card-reader tests are their own console project (tests\Tests.csproj). -->
   <ItemGroup>
     <Compile Remove="tests\**"/>
+  </ItemGroup>
+
+  <!-- What's new: every release's notes, inside the exe so the window works offline. -->
+  <ItemGroup>
+    <EmbeddedResource Include="whatsnew.txt" LogicalName="HotkeyScan.whatsnew.txt"/>
   </ItemGroup>
 
   <!-- "Find the owner": the native hook rides inside the exe and is extracted only while it runs. -->

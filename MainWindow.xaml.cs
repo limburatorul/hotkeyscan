@@ -58,7 +58,10 @@ public partial class MainWindow : Window
         VerdictList.ItemsSource = verdicts;
         Results.ItemsSource = shown;
         Loaded += Load;
+        // before the card is rewritten: it holds the version that ran last
+        bool updated = WhatsNewWindow.DueAfterUpdate(Ecosystem.PreviousVersion());
         Task.Run(Ecosystem.WriteCard);
+        if (updated) Loaded += (_, _) => WhatsNewWindow.Open(this);
         Loaded += async (_, _) => await CheckForUpdate();
         // the app may stay open for days: a release published meanwhile is fetched within the hour
         var again = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromHours(1) };
@@ -115,14 +118,21 @@ public partial class MainWindow : Window
             }
         }
 
-        var cards = await Task.Run(() => Ecosystem.Sisters.Concat(Ecosystem.Paid).DistinctBy(s => s.Id)
-            .Select(s => (s.Id, Card: Ecosystem.ReadCard(s.Id))).Where(c => c.Card != null).ToDictionary(c => c.Id, c => c.Card!));
-        ShowWorksWith(cards);
+        var (cards, installed) = await Task.Run(() =>
+        {
+            var sisters = Ecosystem.Sisters.Concat(Ecosystem.Paid).DistinctBy(s => s.Id).ToList();
+            var found = sisters.Select(s => (s.Id, Card: Ecosystem.ReadCard(s.Id))).Where(c => c.Card != null).ToDictionary(c => c.Id, c => c.Card!);
+            // the card first; one that hasn't run since it was installed has none yet, only its Uninstall entry
+            return (found, sisters.Where(s => found.ContainsKey(s.Id) || Ecosystem.HasUninstallEntry(s.Name)).Select(s => s.Id).ToHashSet());
+        });
+        ShowWorksWith(cards, installed);
     }
+
+    private void WhatsNew_Click(object sender, RoutedEventArgs e) => WhatsNewWindow.Open(this);
 
     /// The sisters that send their taken hotkeys here, and, for someone who bought one of our paid apps,
     /// one quiet line with 30% off the paid ones not installed.
-    private void ShowWorksWith(Dictionary<string, Ecosystem.Card> cards)
+    private void ShowWorksWith(Dictionary<string, Ecosystem.Card> cards, HashSet<string> installed)
     {
         Inline Link(string name, string url)
         {
@@ -132,14 +142,14 @@ public partial class MainWindow : Window
         }
 
         var lines = new List<List<Inline>>();
-        foreach (var (id, name) in Ecosystem.Sisters.Where(s => cards.ContainsKey(s.Id)))
+        foreach (var (id, name) in Ecosystem.Sisters.Where(s => installed.Contains(s.Id)))
             lines.Add(new() { new Run(name), new Run(" · sends a hotkey it can't register here, and its own are checked against our other apps") });
-        foreach (var (id, name) in Ecosystem.Sisters.Where(s => !cards.ContainsKey(s.Id)).Take(3))
+        foreach (var (id, name) in Ecosystem.Sisters.Where(s => !installed.Contains(s.Id)).Take(3))
             lines.Add(new() { Link(name, Ecosystem.Page(id, null)), new Run(" · would send a hotkey it can't register here") });
 
         if (cards.Values.Any(c => c.Paid && c.Edition == "full"))
         {
-            var offers = Ecosystem.Paid.Where(p => !cards.ContainsKey(p.Id)).Take(4).ToList();
+            var offers = Ecosystem.Paid.Where(p => !installed.Contains(p.Id)).Take(4).ToList();
             if (offers.Count > 0)
             {
                 var line = new List<Inline> { new Run("Owners of one of our apps get 30% off the others: ") };

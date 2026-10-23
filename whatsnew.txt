@@ -1,0 +1,24 @@
+# Every release's notes, newest first, shown by What's new (WhatsNewWindow.cs). Built into the exe.
+# "## version | date | title", one entry per x.y with its patches; then the notes: "- " a point,
+# a line in ** ** a heading, anything else a paragraph.
+
+## 1.2 | 2026-10-23 | What's new, and a home in the studio's folder
+HotkeyScan now tells you what changed, right here.
+- **What's new**, this window: every release by month, with the one you're running on top. It opens once after an update and any time from the button at the top.
+- HotkeyScan keeps the one thing it remembers (which notes you've seen) in **%APPDATA%\ProtagonistLabs\HotkeyScan**, next to the studio's other apps. It is still a single exe you can run from anywhere.
+- **Works with** also finds Lume, Frostpane and Auto Clicker when they're installed but haven't been opened yet, wherever they're installed.
+
+## 1.1 | 2026-10-20 | Our own apps' hotkeys, and their clashes
+- Lume, Frostpane and Auto Clicker list their hotkeys on their cards, and HotkeyScan reads them with the rest.
+- When two of them want the same combination, Check, the scan list and the status line say so once: **Lume and Frostpane both use Alt+Space — change it in one of them**.
+- A card that says its app holds a hotkey is compared with what's really held, so one left behind by a crash reads "nothing holds it now".
+- Scan them all also checks combinations our apps use outside the usual sweep, like Alt+Space or a bare F6.
+
+## 1.0 | 2026-09-19 | Find out who's holding your hotkey
+- **Check** a combination, or **Scan them all** (~760 at once), to see which ones are taken.
+- **Find the owner** names the program that reserved a combination; **Press it** shows which one reacts to it.
+- **Key monitor** for a single key that misbehaves: it shows whether the keyboard, a hook or an app is to blame.
+- Reads the hotkeys of PowerToys, ShareX, OBS, AutoHotkey and Raycast straight from their settings.
+- Updates itself in place, checked against what GitHub published, and checks once an hour while open.
+- Other Protagonist Labs apps can send it a combination they couldn't register (**--check**).
+- The exe and its hook say who made them, which settled antivirus false alarms.

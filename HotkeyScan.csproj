@@ -9,7 +9,7 @@
     <RootNamespace>HotkeyScan</RootNamespace>
     <AssemblyName>HotkeyScan</AssemblyName>
 
-    <Version>1.2.0</Version>
+    <Version>1.2.1</Version>
     <Product>HotkeyScan</Product>
     <AssemblyTitle>HotkeyScan</AssemblyTitle>
     <Description>Finds which running program is holding a hotkey</Description>
@@ -36,9 +36,10 @@
     <Compile Remove="tests\**"/>
   </ItemGroup>
 
-  <!-- What's new: every release's notes, inside the exe so the window works offline. -->
+  <!-- What's new: every release's notes and pictures, inside the exe so the window works offline. -->
   <ItemGroup>
     <EmbeddedResource Include="whatsnew.txt" LogicalName="HotkeyScan.whatsnew.txt"/>
+    <EmbeddedResource Include="WhatsNew\*.jpg" LogicalName="HotkeyScan.WhatsNew.%(Filename).jpg"/>
   </ItemGroup>
 
   <!-- "Find the owner": the native hook rides inside the exe and is extracted only while it runs. -->

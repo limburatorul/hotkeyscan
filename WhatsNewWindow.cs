@@ -178,37 +178,21 @@ public sealed class WhatsNewWindow : Window
         return t;
     }
 
-    /// HotkeyScan's colours under the version and title: its blue over a dark ground, a row of keys running through it.
+    /// The release's picture (WhatsNew\x.y.jpg, built in), or the one of the month it came out (WhatsNew\mMM.jpg).
+    internal static Stream Picture(Release r) =>
+        typeof(WhatsNewWindow).Assembly.GetManifestResourceStream($"HotkeyScan.WhatsNew.{r.Version}.jpg")
+        ?? typeof(WhatsNewWindow).Assembly.GetManifestResourceStream($"HotkeyScan.WhatsNew.m{r.Date:MM}.jpg")!;
+
     private static UIElement Banner(Release r)
     {
-        var ground = new LinearGradientBrush(Color.FromRgb(0x0E, 0x15, 0x2B), Color.FromRgb(0x14, 0x22, 0x4A), 20);
-        var glow = new System.Windows.Shapes.Ellipse
-        {
-            Width = 560, Height = 380,
-            Fill = new RadialGradientBrush(Color.FromArgb(0x66, 0x2C, 0x5F, 0xE0), Color.FromArgb(0, 0x2C, 0x5F, 0xE0)),
-        };
-        var art = new Canvas { Width = 960, Height = 170, ClipToBounds = true };
-        Canvas.SetLeft(glow, 520); Canvas.SetTop(glow, -150);
-        art.Children.Add(glow);
-        var v = r.Version.Split('.').Select(int.Parse).ToArray();
-        var rnd = new Random(v[0] * 100 + v[1]);     // seeded by the version: a release looks the same every time
-        for (int x = 400; x < 940; x += 54)
-        {
-            bool lit = rnd.NextDouble() < 0.25;
-            var key = new System.Windows.Shapes.Rectangle
-            {
-                Width = 44, Height = 44, RadiusX = 7, RadiusY = 7, StrokeThickness = 1.5,
-                Stroke = new SolidColorBrush(Color.FromArgb(lit ? (byte)0xE0 : (byte)0x60, 0x7F, 0xA4, 0xFF)),
-                Fill = new SolidColorBrush(Color.FromArgb(lit ? (byte)0x55 : (byte)0x10, 0x2C, 0x5F, 0xE0)),
-            };
-            Canvas.SetLeft(key, x); Canvas.SetTop(key, 63 + (rnd.NextDouble() - 0.5) * 30);
-            art.Children.Add(key);
-        }
-        var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(26, 0, 0, 0), MaxWidth = 360, HorizontalAlignment = HorizontalAlignment.Left };
-        words.Children.Add(new TextBlock { Text = "WHAT’S NEW IN", FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = new SolidColorBrush(Color.FromArgb(0xCC, 255, 255, 255)) });
-        words.Children.Add(new TextBlock { Text = r.Version, FontSize = 34, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White });
-        words.Children.Add(new TextBlock { Text = r.Title, FontSize = 14, TextWrapping = TextWrapping.Wrap, Foreground = new SolidColorBrush(Color.FromArgb(0xE6, 255, 255, 255)) });
-        return new Grid { Width = 960, Height = 170, Background = ground, Children = { art, words } };
+        using var stream = Picture(r);
+        var picture = new System.Windows.Media.Imaging.BitmapImage();
+        picture.BeginInit();
+        picture.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+        picture.StreamSource = stream;
+        picture.EndInit();
+        picture.Freeze();
+        return new Image { Source = picture, Width = 960, Height = 170, Stretch = Stretch.UniformToFill };
     }
 
     private static Brush Frozen(Color c)

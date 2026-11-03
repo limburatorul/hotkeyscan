@@ -8,6 +8,7 @@ HotkeyScan now tells you what changed, right here.
 - HotkeyScan keeps the one thing it remembers (which notes you've seen) in **%APPDATA%\ProtagonistLabs\HotkeyScan**, next to the studio's other apps. It is still a single exe you can run from anywhere.
 - **Works with** also finds Lume, Frostpane and Auto Clicker when they're installed but haven't been opened yet, wherever they're installed.
 - **1.2.1:** **a new icon**, brighter and easier to spot in the taskbar, and What's new now shows a picture for each release.
+- **1.2.2:** **Buy me a pizza** at the top of the window, in red, if you'd like to chip in. It glows softly every 10 seconds while the window is on screen, and keeps still when it's minimized, under your pointer, or when Windows animations are off. It's optional, and it goes toward code signing and a Steam listing.
 
 ## 1.1 | 2026-10-20 | Our own apps' hotkeys, and their clashes
 - Lume, Frostpane and Auto Clicker list their hotkeys on their cards, and HotkeyScan reads them with the rest.

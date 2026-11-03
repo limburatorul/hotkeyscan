@@ -9,6 +9,7 @@ using System.Windows.Documents;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace HotkeyScan;
 
@@ -67,7 +68,45 @@ public partial class MainWindow : Window
         var again = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromHours(1) };
         again.Tick += async (_, _) => await CheckForUpdate();
         again.Start();
+        nudge.Tick += (_, _) => Nudge();
+        IsVisibleChanged += (_, _) => ArmNudge();
+        StateChanged += (_, _) => ArmNudge();
     }
+
+    // ---------- Buy me a pizza ----------
+
+    /// 3 s after the window first shows, then every 10 s while it is on screen.
+    private readonly System.Windows.Threading.DispatcherTimer nudge = new() { Interval = TimeSpan.FromSeconds(3) };
+
+    /// Stopped while minimized or hidden, and never started with Windows' animation effects off.
+    private void ArmNudge()
+    {
+        if (IsVisible && WindowState != WindowState.Minimized && SystemParameters.ClientAreaAnimation) nudge.Start();
+        else nudge.Stop();
+    }
+
+    /// A 700 ms double pulse around the centre (1, 1.06, 1, 1.03, 1), brightening at the peaks.
+    private void Nudge()
+    {
+        nudge.Interval = TimeSpan.FromSeconds(10);
+        if (PizzaButton.IsMouseOver) return;
+        var ease = new QuarticEase { EasingMode = EasingMode.EaseOut };
+        var scale = new DoubleAnimationUsingKeyFrames();
+        var paint = new ColorAnimationUsingKeyFrames();
+        foreach (var (ms, size, peak) in new[] { (140, 1.06, true), (300, 1.0, false), (420, 1.03, true), (700, 1.0, false) })
+        {
+            var at = KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(ms));
+            scale.KeyFrames.Add(new EasingDoubleKeyFrame(size, at, ease));
+            paint.KeyFrames.Add(new EasingColorKeyFrame(peak ? Color.FromRgb(0xF2, 0x55, 0x55) : Color.FromRgb(0xD6, 0x3A, 0x3A), at, ease));
+        }
+        var grow = (ScaleTransform)PizzaButton.RenderTransform;
+        grow.BeginAnimation(ScaleTransform.ScaleXProperty, scale);
+        grow.BeginAnimation(ScaleTransform.ScaleYProperty, scale);
+        PizzaButton.Background.BeginAnimation(SolidColorBrush.ColorProperty, paint);
+    }
+
+    private void Pizza_Click(object sender, RoutedEventArgs e) =>
+        Process.Start(new ProcessStartInfo("https://buymeacoffee.com/protagonistlabs") { UseShellExecute = true });
 
     private async Task CheckForUpdate()
     {
